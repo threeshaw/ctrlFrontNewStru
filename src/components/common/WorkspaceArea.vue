@@ -38,31 +38,35 @@
           
           <VariableList />
         </div>
-
-        
         <div v-if="currentPage === '数据可视化'" class="data-import-view">
-          <h1>12344</h1>
-          <div>
-            <dataList :filein="variables"></dataList>
-          </div>
         </div>
         <!-- 其他页面保持不变 -->
       </div>
     </div>
-    
+
     <DataImportModal 
       v-model:visible="modelStore.showDataImportModal"
       @import-complete="handleImportComplete"
     />
+    
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref,computed } from 'vue'
 import { useModelStore } from '@/store/modelStore'
 import DataImportModal from '@/components/common/DataImportModal.vue'
 import VariableList from '@/components/common/VariableList.vue'
 import dataList from '../datalist/datalist.vue'
+
+const modify = ref(false)
+const startModify = () =>{
+  modify.value = true
+}
+const stopMod = () =>{
+  modify.value = false
+  console.log(modify.value)
+}
 const modelStore = useModelStore()
 const currentPage = computed(() => modelStore.currentPage)
 const variables = computed(() => modelStore.variables || [])
@@ -78,6 +82,7 @@ const handleImportComplete = () => {
 
 <style scoped>
 #workspace {
+min-width: 1200px;
   flex: 1;
   padding: 20px;
   overflow-y: auto;

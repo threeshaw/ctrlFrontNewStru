@@ -1,5 +1,9 @@
 <template>
   <div class="variable-list">
+    <div class="visArea" v-if = "visualize">
+      <button @click="closeVis"></button>
+      <dataList></dataList>
+    </div>
     <div class="list-header">
       <div class="header-info" v-if="fileInfo">
         <div class="file-name">文件: {{ fileInfo.name }}</div>
@@ -54,6 +58,12 @@
           </svg>
           清空
         </button>
+        <button @click="modifyVariable">
+          修改数据
+        </button>
+        <button @click="dataOut">
+          导出选中数据
+        </button>
       </div>
       
       <div class="search-box">
@@ -86,6 +96,7 @@
             <th>量程上限</th>
             <th>量程下限</th>
             <th>属性</th>
+            <th>类型</th>
             <!-- <th>首值</th> -->
             <!-- <th>最小值</th>
             <th>最大值</th>
@@ -112,6 +123,11 @@
             <td>{{ variable.rangeHigh !== null ? variable.rangeHigh : '-' }}</td>
             <td>{{ variable.rangeLow !== null ? variable.rangeLow : '-' }}</td>
             <td>{{ variable.property || '-' }}</td>
+            <td><select v-model="variable.IOtype" @change="toggleIOtype(variable,variable.IOtype)">
+                <option value="undefined">未定义</option>
+                <option value="mv">输入</option>
+                <option value="cv">输出</option>
+              </select></td>
             <!-- <td>{{ variable.firstValue !== null ? variable.firstValue.toFixed(2) : '-' }}</td>
             <td>{{ variable.min !== null ? variable.min.toFixed(2) : '-' }}</td>
             <td>{{ variable.max !== null ? variable.max.toFixed(2) : '-' }}</td>
@@ -134,6 +150,7 @@
                   <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"></path>
                 </svg>
               </button>
+              
             </td>
           </tr>
         </tbody>
@@ -150,17 +167,33 @@
         <button class="btn-import" @click="openImportModal">导入数据</button>
       </div>
     </div>
+    <div>
+      <DataModify @stopvis="stopMod" :visible="modify"></DataModify>
+    </div>
   </div>
-  <button @click="test">test</button>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, toValue } from 'vue'
 import { useModelStore } from '@/store/modelStore'
+import dataList from '../datalist/datalist.vue'
+import DataModify from './DataModify.vue'
 
 const modelStore = useModelStore()
 const searchQuery = ref('')
+const modify = ref(false)
+const modifyVariable = () =>{
+  modify.value = true
+}
+const stopMod = () =>{
+  modify.value = false
+  console.log(modify.value)
+}
 
+const visualize = ref(false)
+const closeVis = () =>{
+  visualize.value = false
+}
 // 使用计算属性访问状态
 const selectedVariables = computed(() => modelStore.selectedVariables || [])
 const variables = computed(() => modelStore.variables || [])
@@ -177,7 +210,7 @@ const filteredVariables = computed(() => {
   )
 })
 const test = ()=>{
-  console.log(variables.value[0])
+  console.log(selectedVariables.value[0])
 }
 const allSelected = computed(() => {
   return variables.value.length > 0 && 
@@ -200,12 +233,20 @@ const toggleSelectAll = () => {
   }
 }
 
+const dataOut = () =>{
+  modelStore.transposedData()
+}
+const toggleIOtype = (a,b) =>{
+  console.log(a.id)
+  modelStore.toggleVariableIO(a,b)
+}
 const deleteSelected = () => {
   modelStore.deleteSelectedVariables()
 }
 
 const visualizeSelected = () => {
-  modelStore.visualizeSelectedVariables()
+  //modelStore.visualizeSelectedVariables()
+visualize.value = true
 }
 
 const analyzeSelected = () => {

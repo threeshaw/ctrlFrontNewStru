@@ -8,58 +8,31 @@
         <p class="subtitle">添加文件名并从下拉框中选择</p>
       </div>
       <button @click="changeShowMode">切换显示</button>
+      <button @click="test">测试</button>
       <!-- 两种界面 or 一个界面两个选择：可以使用两个绘图？两个模块：在一个格子里叠5个图，两种使用v-if切换 -->
     </div>
 
     <div class="visualization-area">
       <div class="canvas-container">
         <div class="select-container" v-if="singleShow">
-          <select v-model="selectedFile1">
-            <option value="" disabled>请选择文件1</option>
-            <option v-for="(file, index) in leftFileList" :key="index" :value="index">
-              {{ file }}
-            </option>
-          </select>
-          <button @click="loadFile1(selectedFile1)">loadfile1</button>
-          <select v-model="selectedFile2">
-            <option value="" disabled>请选择文件2</option>
-            <option v-for="(file, index) in leftFileList" :key="index" :value="index">
-              {{ file }}
-            </option>
-          </select>
-          <button @click="loadFile2(selectedFile2)">loadfile2</button>
+          <button @click="loadFile1(selectedFile1)">reload</button>
           <div class="selection">
-            <p v-if="selectedFile1" class="file-name">
-              当前选择: {{ leftFileList[selectedFile1] }}
-            </p>
-            <p v-else class="empty">未选择文件</p>
-            <canvas ref="canvas" width="700" height="500"></canvas>
-            <div v-if="!currentData1.length" class="no-data">
-              <p>选择文件加载数据</p>
-            </div>
+            <canvas ref="canvas" width="700" height="400"></canvas>
           </div>
         </div>
 
         <div calss="multiContainer" v-if="multiShow">
-          <div>
-            <select v-model="multiSelectedFile1">
-              <option value="" disabled>请选择文件1</option>
-              <option v-for="(file, index) in leftFileList" :key="index" :value="index">
-                {{ file }}
-              </option>
-            </select>
-            <button @click="changeReload1">reload</button>
-            <tst1 :datain="files" :index1="multiFile1"></tst1>
+          <div v-if="multiShow1">
+            <tst1 :datain="0" ></tst1>
           </div>
-          <div>
-            <select v-model="multiSelectedFile2">
-              <option value="" disabled>请选择文件2</option>
-              <option v-for="(file, index) in leftFileList" :key="index" :value="index">
-                {{ file }}
-              </option>
-            </select>
-            <button @click="changeReload2">reload</button>
-            <tst1 :datain="files" :index1="multiFile2"></tst1>
+          <div v-if="multiShow2">
+            <tst1 :datain="1" ></tst1>
+          </div>
+          <div v-if="multiShow3">
+            <tst1 :datain="2" ></tst1>
+          </div>
+          <div v-if="multiShow4">
+            <tst1 :datain="3"></tst1>
           </div>
         </div>
       </div>
@@ -67,30 +40,20 @@
       <div class="controls" v-if="false">
         <div class="info-panel">
           <h3>数据信息</h3>
-          <div v-if="currentData1.length">
-            <p>当前数据集: {{ activeFileName }}</p>
+          <div>
             <div class="stats">
               <div class="stat-item">
-                <h4>数据点数量</h4>
-                <div class="stat-value">{{ currentData1.length }}</div>
-              </div>
-              <div class="stat-item">
                 <h4>X轴范围</h4>
-                <div class="stat-value">{{ xMin }} - {{ xMax }}</div>
+                <div class="stat-value">{{ minX }} - {{ maxX }}</div>
               </div>
               <div class="stat-item">
                 <h4>Y轴范围</h4>
-                <div class="stat-value">{{ yMin }} - {{ yMax }}</div>
+                <div class="stat-value">{{ minY }} - {{ maxY }}</div>
               </div>
             </div>
           </div>
-          <p v-else>未加载任何数据</p>
         </div>
 
-        <div class="button-group">
-          <button @click="generateRandomData">下一步</button>
-          <button @click="clearCanvas">清除画布</button>
-        </div>
       </div>
     </div>
   </div>
@@ -98,111 +61,133 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import tst1 from './basicCav.vue'
+import { useModelStore } from '@/store/modelStore'
 
+const modelStore = useModelStore()
 const multiShow = ref(false)
 const singleShow = ref(true)
 const changeShowMode = () => {
   multiShow.value = !multiShow.value
   singleShow.value = !singleShow.value
+  
 }
 const canvas = ref(null)
 const ctx = ref(null)
 const fileInput = ref(null)
 const dataInChart = ref([])
+const multiShow1 = ref(false)
+const multiShow2 = ref(false)
+const multiShow3 = ref(false)
+const multiShow4 = ref(false)
+
 // 文件数据
-const props = defineProps({
-  filein: {
-    default: [],
-  },
-})
+
+
+const dataToShow = ref([])
 const selectedFile1 = ref('')
 const selectedFile2 = ref('')
 const multiSelectedFile1 = ref('')
-let multiFile1 = ref(0)
+const minX=ref(null)
+const maxX=ref(null)
+const minY=ref(null)
+const maxY=ref(null)
 const changeReload1 = () => {
-  multiFile1.value = multiSelectedFile1.value
-  console.log(multiFile1.value)
+  console.log('1')
+
+
+}
+const allPointsx = ref([])
+const allPointsy = ref([])
+const calculateBounds = (curvesArray) => {
+  // 检查是否有有效数据
+  allPointsx.value = []
+  allPointsy.value = []
+  if (!curvesArray || curvesArray.length === 0) {
+    return { minX: null, maxX: null, minY: null, maxY: null }
+  }
+  
+  // 合并所有点
+  
+  for(let i = 0;i<curvesArray.length;i++){
+  for (let j = 0;j<curvesArray[0].length;j++){
+    allPointsx.value.push(curvesArray[i][j][0])
+    allPointsy.value.push(curvesArray[i][j][1])
+  }
+}
+  console.log(allPointsx.value.length)
+  // 检查点数据是否有效
+  
+    minX.value = Math.min(...allPointsx.value),
+    maxX.value = Math.max(...allPointsx.value),
+    minY.value = Math.min(...allPointsy.value),
+    maxY.value = Math.max(...allPointsy.value)
+  //console.log(maxY.value)
 }
 
-const multiSelectedFile2 = ref('')
-let multiFile2 = ref(1)
-const changeReload2 = () => {
-  multiFile2.value = multiSelectedFile2.value
+
+const test = () =>{
+  dataToShow.value = []
+  
+  for (let i =0;i<modelStore.selectedVariables.length;i++ ){
+  dataToShow.value.push(modelStore.selectedVariables[i].data)
+}
+  calculateBounds(dataToShow.value)
+  //console.log(minX.value)
+  multiShow1.value = dataToShow.value.length > 0 ? true : false
+  multiShow2.value = dataToShow.value.length > 1 ? true : false
+  multiShow3.value = dataToShow.value.length > 2 ? true : false
+  multiShow4.value = dataToShow.value.length > 3 ? true : false
+
 }
 
-const files = ref(props.filein)
 const leftFileList = ref(['1'])
 const activeFileIndex = ref(-1)
-const currentData1 = ref([]) //一图两个
-const currentData2 = ref([])
+
+
 const renewChart = () => {
   leftFileList.value = []
   dataInChart.value = []
+  dataToShow.value = []
+  for (let i = 0; i < modelStore.selectedVariables.length; i = i + 1) {
 
-  for (let i = 0; i < files.value.length; i = i + 1) {
-
-    leftFileList.value.push(files.value[i].tag)
+    leftFileList.value.push(modelStore.selectedVariables.tags)
   }
+  
+
 }
 // 新文件数据模型
 
-// 计算数据范围：选择最大的范围
-const xRange1 = computed(() => {
-  if (!currentData1.value.length) return [0, 0]
-  const xs = currentData1.value.map((p) => p[0])
-  return [Math.min(...xs), Math.max(...xs)]
-})
-const xRange2 = computed(() => {
-  if (!currentData2.value.length) return [0, 0]
-  const xs = currentData2.value.map((p) => p[0])
-  return [Math.min(...xs), Math.max(...xs)]
-})
-
-const yRange1 = computed(() => {
-  if (!currentData1.value.length) return [0, 0]
-  const ys = currentData1.value.map((p) => p[1])
-  return [Math.min(...ys), Math.max(...ys)]
-})
-const yRange2 = computed(() => {
-  if (!currentData2.value.length) return [0, 0]
-  const ys = currentData2.value.map((p) => p[1])
-  return [Math.min(...ys), Math.max(...ys)]
-})
 
 const activeFileName = computed(() => {
   return activeFileIndex.value >= 0 ? files.value[activeFileIndex.value].name : ''
 })
 
 // 加载文件数据
-const loadFile1 = (index) => {
-  activeFileIndex.value = index
-  currentData1.value = files.value[index].data
+const loadFile1 = () => {
+  
+
   drawScatterPlot1()
-  console.log(files.value[0].data)
 }
-const loadFile2 = (index) => {
-  activeFileIndex.value = index
-  currentData2.value = [...files.value[index].data]
+const loadFile2 = () => {
+
   drawScatterPlot1()
 }
 
 // 绘制散点图1
 const drawScatterPlot1 = () => {
 
-  if (!ctx.value || !currentData1.value.length) return
+ctx.value = canvas.value.getContext('2d')
+
 
   const canvasEl = canvas.value
   const width = canvasEl.width
   const height = canvasEl.height
   const padding = 50
-  const xMin = Math.min(xRange1.value[0], xRange2.value[0])
-  const xMax = Math.max(xRange1.value[1], xRange2.value[1])
-  const yMin = Math.min(yRange1.value[0], yRange2.value[0])
-  const yMax = Math.max(yRange1.value[1], yRange2.value[1])
+
   // 计算比例因子
 
-  let scaleX = (width - 2 * padding) / (xMax - xMin)
-  let scaleY = (height - 2 * padding) / (yMax - yMin)
+  let scaleX = (width - 2 * padding) / (maxX.value - minX.value)
+  let scaleY = (height - 2 * padding) / (maxY.value - minY.value)
 
   // 设置画布尺寸
 
@@ -242,27 +227,17 @@ const drawScatterPlot1 = () => {
   }
 
   // 绘制折线（核心修改）
+  ctx.value.fillStyle = '2c3e50'
   ctx.value.beginPath()
   ctx.value.strokeStyle = '#FF5722'
-  ctx.value.lineWidth = 3
+  ctx.value.lineWidth = 1
   ctx.value.lineCap = 'round'
   ctx.value.lineJoin = 'round'
-
-  currentData1.value.forEach((point, index) => {
-    const x = padding + (point[0] - xMin) * scaleX
-    const y = height - padding - (point[1] - yMin) * scaleY
-
-    if (index === 0) {
-      ctx.value.moveTo(x, y)
-    } else {
-      ctx.value.lineTo(x, y)
-    }
-  })
-  console.log('fin1')
-  ctx.value.fillStyle = 'blue'
-  currentData2.value.forEach((point, index) => {
-    const x = padding + (point[0] - xMin) * scaleX
-    const y = height - padding - (point[1] - yMin) * scaleY
+  if(dataToShow.value.length>0){
+    for (let i = 0;i<dataToShow.value.length;i++){
+    dataToShow.value[i].forEach((point, index) => {
+    const x = padding + (point[0] - minX.value) * scaleX
+    const y = height - padding - (point[1] - minY.value) * scaleY
 
     if (index === 0) {
       ctx.value.moveTo(x, y)
@@ -270,9 +245,16 @@ const drawScatterPlot1 = () => {
       ctx.value.lineTo(x, y)
     }
   })
+}
+  }
+
+
+
+  ctx.value.fillStyle = '2c3e50'
+  
   ctx.value.stroke()
 
-  // 绘制点
+
 
   // 绘制标题
   ctx.value.fillStyle = '#2c3e50'
@@ -300,8 +282,7 @@ const drawScatterPlot1 = () => {
 // 清除画布
 const clearCanvas = () => {
   activeFileIndex.value = -1
-  currentData1.value = []
-  currentData2.value = []
+
   if (ctx.value) {
     ctx.value.clearRect(0, 0, canvas.value.width, canvas.value.height)
   }
@@ -332,14 +313,14 @@ function getCurrentDate() {
 }
 
 onMounted(() => {
-  ctx.value = canvas.value.getContext('2d')
+  drawScatterPlot1()
   renewChart()
 })
 
+
 defineExpose({
   renewChart,
-  files,
-  leftFileList,
+
 })
 </script>
 

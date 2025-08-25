@@ -2,34 +2,33 @@
   <button @click="test">ceshi</button>
   <div class="canvas-container">
     <div class="info">{{ chosen }}</div>
-    <canvas ref="canvas" width="800" height="300"></canvas>
+    <canvas ref="canvas" width="800" height="200"></canvas>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-
+import { ref, onMounted, computed, watch} from 'vue'
+import { useModelStore } from '@/store/modelStore'
 const props = defineProps({
   datain: {
     default: [],
   },
-  index1: {
-    default: 0,
-  },
+
 })
 const ctx = ref(null)
 const canvas = ref('')
-let chosen = ref(props.index1)
-const currentData = ref(props.datain[props.index1].data)
 
+const modelStore = useModelStore()
+
+const currentData = modelStore.selectedVariables.length >= props.datain ? 
+ref(modelStore.selectedVariables[props.datain].data) : ref([])
 const generateRandomData = () => {
   currentData.value = generateSampleData(Math.floor(Math.random() * 100) + 50, 0, 100, 0, 100)
 }
 const test = () => {
+  console.log(props.datain)
+  console.log(currentData.value.length)
 
-  currentData.value = props.datain[props.index1].data
-
-  drawScatterPlot1()
 }
 // 生成示例数据
 function generateSampleData(count, minX, maxX, minY, maxY) {
@@ -52,6 +51,7 @@ const yRange = computed(() => {
   const ys = currentData.value.map((p) => p[1])
   return [Math.min(...ys), Math.max(...ys)]
 })
+
 const drawScatterPlot1 = () => {
   const canvasEl = canvas.value
   const width = canvasEl.width
@@ -86,7 +86,7 @@ const drawScatterPlot1 = () => {
   // 绘制折线（核心修改）
   ctx.value.beginPath()
   ctx.value.strokeStyle = '#FF5722'
-  ctx.value.lineWidth = 3
+  ctx.value.lineWidth = 1
   ctx.value.lineCap = 'round'
   ctx.value.lineJoin = 'round'
   currentData.value.forEach((point, index) => {
@@ -115,13 +115,35 @@ const drawScatterPlot1 = () => {
   // X轴标签
   ctx.value.textAlign = 'center'
   ctx.value.fillText('X 轴', width / 2, height - 10)
-
+  ctx.value.fillText(
+    xMin.toFixed(1), 
+    padding+20, 
+    height - padding + 10
+  )
+ ctx.value.fillText(
+    xMax.toFixed(1), 
+    width - padding, 
+    height - padding + 10
+  )
   // Y轴标签
   ctx.value.save()
   ctx.value.translate(15, height / 2)
   ctx.value.rotate(-Math.PI / 2)
   ctx.value.textAlign = 'center'
   ctx.value.fillText('Y 轴', 0, 0)
+  ctx.value.fillText(
+    yMin.toFixed(1), 
+    -50, 
+    25
+    
+  )
+  
+  // Y轴最大值（上端）
+  ctx.value.fillText(
+    yMax.toFixed(1), 
+    padding , 
+    padding -20
+  )
   ctx.value.restore()
 }
 
