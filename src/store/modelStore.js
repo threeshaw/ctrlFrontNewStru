@@ -373,12 +373,6 @@ export const useModelStore = defineStore("model", {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      // 显示成功通知
-      showNotification.value = true;
-      setTimeout(() => {
-        showNotification.value = false;
-      }, 3000);
     },
 
     toggleVariableIO(variable, newIO) {
