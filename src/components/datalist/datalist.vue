@@ -17,19 +17,27 @@
         <div class="select-container" v-if="singleShow">
           <button @click="loadFile1(selectedFile1)">reload</button>
           <div class="selection">
-            <canvas ref="canvas" width="700" height="400"></canvas>
+            <button @click="zoomOut" :disabled="zoomLevel <= 1">缩小</button>
+            <button @click="zoomIn" :disabled="zoomLevel >= 5">放大</button>
+            <button @click="resetView">重置视图</button>
+            <button @click="toggleMarkerMode" :class="{ active: markerMode }">{{ markerMode ? '标记模式开启' : '标记模式关闭'
+              }}</button>
+            <canvas ref="canvas" width="700" height="400" @click="handleCanvasClick"></canvas>
+            <input type="range" min="0" max="100" v-model="sliderPosition" class="slider"
+              @input="updateViewPosition"></input>
+              <p>当前x坐标:{{ markIndex }} </p>
           </div>
         </div>
 
         <div calss="multiContainer" v-if="multiShow">
           <div v-if="multiShow1">
-            <tst1 :datain="0" ></tst1>
+            <tst1 :datain="0"></tst1>
           </div>
           <div v-if="multiShow2">
-            <tst1 :datain="1" ></tst1>
+            <tst1 :datain="1"></tst1>
           </div>
           <div v-if="multiShow3">
-            <tst1 :datain="2" ></tst1>
+            <tst1 :datain="2"></tst1>
           </div>
           <div v-if="multiShow4">
             <tst1 :datain="3"></tst1>
@@ -53,275 +61,360 @@
             </div>
           </div>
         </div>
-
       </div>
     </div>
   </div>
 </template>
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
-import tst1 from './basicCav.vue'
-import { useModelStore } from '@/store/modelStore'
+import { ref, onMounted, computed, watch } from "vue";
+import tst1 from "./basicCav.vue";
+import { useModelStore } from "@/store/modelStore";
 
-const modelStore = useModelStore()
-const multiShow = ref(false)
-const singleShow = ref(true)
+
+const modelStore = useModelStore();
+const multiShow = ref(false);
+const singleShow = ref(true);
 const changeShowMode = () => {
-  multiShow.value = !multiShow.value
-  singleShow.value = !singleShow.value
-  
+  multiShow.value = !multiShow.value;
+  singleShow.value = !singleShow.value;
+};
+const canvas = ref(null);
+const ctx = ref(null);
+const fileInput = ref(null);
+const dataInChart = ref([]);
+const multiShow1 = ref(false);
+const multiShow2 = ref(false);
+const multiShow3 = ref(false);
+const multiShow4 = ref(false);
+const sliderPosition = ref(0)
+const visibleDataRange = ref([]);
+const visibleDataPoints = ref(0)
+//先处理文件可见与不可见部分
+// 可见文件数据
+const zoomLevel = ref(1)
+function getVisibleData() {
+  const datatmp = []
+  const data1 = modelStore.selectedVariables[0].data
+  const totalPoints = data1.length;
+  const visibleCount = Math.floor(totalPoints / zoomLevel.value);
+  const startIndex = Math.floor(
+    (sliderPosition.value / 100) * (totalPoints - visibleCount)
+  );
+
+  visibleDataRange.value = [startIndex, startIndex + visibleCount];
+  visibleDataPoints.value = visibleCount;
+  for (let i = 0; i < modelStore.selectedVariables.length; i++) {
+    let pointtmp = modelStore.selectedVariables[i].data.slice(startIndex, startIndex + visibleCount)
+    datatmp.push(pointtmp)
+  }
+  return datatmp;
+
 }
-const canvas = ref(null)
-const ctx = ref(null)
-const fileInput = ref(null)
-const dataInChart = ref([])
-const multiShow1 = ref(false)
-const multiShow2 = ref(false)
-const multiShow3 = ref(false)
-const multiShow4 = ref(false)
 
-// 文件数据
-
-
-const dataToShow = ref([])
-const selectedFile1 = ref('')
-const selectedFile2 = ref('')
-const multiSelectedFile1 = ref('')
-const minX=ref(null)
-const maxX=ref(null)
-const minY=ref(null)
-const maxY=ref(null)
-const changeReload1 = () => {
-  console.log('1')
-
-
+// 放大
+function zoomIn() {
+  if (zoomLevel.value < 5) {
+    zoomLevel.value++;
+    drawScatterPlot1();
+  }
 }
-const allPointsx = ref([])
-const allPointsy = ref([])
+
+// 缩小
+function zoomOut() {
+  if (zoomLevel.value > 1) {
+    zoomLevel.value--;
+    drawScatterPlot1();
+  }
+}
+
+// 重置视图
+function resetView() {
+  zoomLevel.value = 1;
+  sliderPosition.value = 0;
+  selectedPoint.value = null;
+  //drawChart();
+}
+
+// 切换标记模式
+function toggleMarkerMode() {
+  markerMode.value = !markerMode.value;
+  selectedPoint.value = null;
+  //drawChart();
+}
+const dataToShow = ref([]);
+const selectedFile1 = ref("");
+const selectedFile2 = ref("");
+const multiSelectedFile1 = ref("");
+const minX = ref(null);
+const maxX = ref(null);
+const minY = ref(null);
+const maxY = ref(null);
+const selectedPoint = ref(null);
+const allPointsx = ref([]);
+const allPointsy = ref([]);
 const calculateBounds = (curvesArray) => {
+
   // 检查是否有有效数据
-  allPointsx.value = []
-  allPointsy.value = []
+  allPointsx.value = [];
+  allPointsy.value = [];
   if (!curvesArray || curvesArray.length === 0) {
-    return { minX: null, maxX: null, minY: null, maxY: null }
+    return { minX: null, maxX: null, minY: null, maxY: null };
   }
-  
+
   // 合并所有点
-  
-  for(let i = 0;i<curvesArray.length;i++){
-  for (let j = 0;j<curvesArray[0].length;j++){
-    allPointsx.value.push(curvesArray[i][j][0])
-    allPointsy.value.push(curvesArray[i][j][1])
+
+  for (let i = 0; i < curvesArray.length; i++) {
+    for (let j = 0; j < curvesArray[0].length; j++) {
+      allPointsx.value.push(curvesArray[i][j][0]);
+      allPointsy.value.push(curvesArray[i][j][1]);
+    }
   }
-}
-  console.log(allPointsx.value.length)
+  console.log(allPointsx.value.length);
   // 检查点数据是否有效
-  
-    minX.value = Math.min(...allPointsx.value),
-    maxX.value = Math.max(...allPointsx.value),
-    minY.value = Math.min(...allPointsy.value),
-    maxY.value = Math.max(...allPointsy.value)
+
+  (minX.value = Math.min(...allPointsx.value)),
+    (maxX.value = Math.max(...allPointsx.value)),
+    (minY.value = Math.min(...allPointsy.value)),
+    (maxY.value = Math.max(...allPointsy.value));
   //console.log(maxY.value)
-}
+};
+const leftFileList = ref([]);
+const test = () => {
 
+  for (let i = 0; i < modelStore.selectedVariables.length; i++) {
+    dataToShow.value.push(modelStore.selectedVariables[i].data); //所有需要绘图数组
+    leftFileList.value.push(modelStore.selectedVariables[i].tag); //所有绘制的tag
+  }
 
-const test = () =>{
-  dataToShow.value = []
-  
-  for (let i =0;i<modelStore.selectedVariables.length;i++ ){
-  dataToShow.value.push(modelStore.selectedVariables[i].data)
-}
-  calculateBounds(dataToShow.value)
   //console.log(minX.value)
-  multiShow1.value = dataToShow.value.length > 0 ? true : false
-  multiShow2.value = dataToShow.value.length > 1 ? true : false
-  multiShow3.value = dataToShow.value.length > 2 ? true : false
-  multiShow4.value = dataToShow.value.length > 3 ? true : false
+  multiShow1.value = dataToShow.value.length > 0 ? true : false;
+  multiShow2.value = dataToShow.value.length > 1 ? true : false;
+  multiShow3.value = dataToShow.value.length > 2 ? true : false;
+  multiShow4.value = dataToShow.value.length > 3 ? true : false;
+};
 
-}
-
-const leftFileList = ref(['1'])
-const activeFileIndex = ref(-1)
-
+const activeFileIndex = ref(-1);
+const colorChoice = ["yellow", "blue", "black", "green", "red"];
 
 const renewChart = () => {
-  leftFileList.value = []
-  dataInChart.value = []
-  dataToShow.value = []
+  leftFileList.value = [];
+  dataInChart.value = [];
+  dataToShow.value = [];
   for (let i = 0; i < modelStore.selectedVariables.length; i = i + 1) {
-
-    leftFileList.value.push(modelStore.selectedVariables.tags)
+    leftFileList.value.push(modelStore.selectedVariables.tag);
   }
-  
-
-}
+};
 // 新文件数据模型
 
-
 const activeFileName = computed(() => {
-  return activeFileIndex.value >= 0 ? files.value[activeFileIndex.value].name : ''
-})
+  return activeFileIndex.value >= 0
+    ? files.value[activeFileIndex.value].name
+    : "";
+});
 
 // 加载文件数据
 const loadFile1 = () => {
-  
+  drawScatterPlot1();
+};
 
-  drawScatterPlot1()
+function drawCurve(color, points, padding, height, scaleX, scaleY) {
+  ctx.value.beginPath(); // 开始新路径
+  let maxIndex = points.length
+  for (let index = 0; index < maxIndex; index++) {
+    const x = padding + (points[index][0] - minX.value) * scaleX;
+    const y = height - padding - (points[index][1] - minY.value) * scaleY;
+    if (index === 0) {
+      ctx.value.moveTo(x, y);
+    } else {
+      ctx.value.lineTo(x, y);
+    }
+  }
+
+  ctx.value.strokeStyle = color; // 设置线条颜色
+  ctx.value.lineWidth = 1; // 设置线条宽度
+  ctx.value.stroke(); // 绘制曲线
 }
-const loadFile2 = () => {
-
-  drawScatterPlot1()
-}
-
 // 绘制散点图1
 const drawScatterPlot1 = () => {
-
-ctx.value = canvas.value.getContext('2d')
-
-
-  const canvasEl = canvas.value
-  const width = canvasEl.width
-  const height = canvasEl.height
-  const padding = 50
+  ctx.value = canvas.value.getContext("2d");
+  calculateBounds(getVisibleData());
+  const canvasEl = canvas.value;
+  const width = canvasEl.width;
+  const height = canvasEl.height;
+  const padding = 20;
 
   // 计算比例因子
-
-  let scaleX = (width - 2 * padding) / (maxX.value - minX.value)
-  let scaleY = (height - 2 * padding) / (maxY.value - minY.value)
+  let pointsToDraw = getVisibleData()
+  let scaleX = (width - 2 * padding) / (maxX.value - minX.value);
+  let scaleY = (height - 2 * padding) / (maxY.value - minY.value);
 
   // 设置画布尺寸
 
-  ctx.value.clearRect(0, 0, canvasEl.width, canvasEl.height)
+  ctx.value.clearRect(0, 0, canvasEl.width, canvasEl.height);
 
   // 设置画布尺寸
 
   // 绘制坐标轴
-  ctx.value.strokeStyle = '#4fc3f7'
-  ctx.value.lineWidth = 2
-  ctx.value.beginPath()
-  ctx.value.moveTo(padding, padding)
-  ctx.value.lineTo(padding, height - padding)
-  ctx.value.lineTo(width - padding, height - padding)
-  ctx.value.stroke()
+  ctx.value.strokeStyle = "#4fc3f7";
+  ctx.value.lineWidth = 2;
+  ctx.value.beginPath();
+  ctx.value.moveTo(padding, padding);
+  ctx.value.lineTo(width - padding, padding);
+  ctx.value.lineTo(width - padding, height - padding);
+  ctx.value.lineTo(padding, height - padding);
+  ctx.value.lineTo(padding, padding);
+
+  // ctx.value.moveTo(width - padding + 10, padding - 10);
+  // ctx.value.lineTo(width - padding - 40, padding - 10);
+  // ctx.value.lineTo(width - padding - 40, padding + 30);
+  // ctx.value.lineTo(width - padding + 10, padding + 30);
+  // ctx.value.lineTo(width - padding + 10, padding - 10);
+  ctx.value.stroke();
 
   // 绘制网格
-  ctx.value.strokeStyle = 'rgba(79, 195, 247, 0.2)'
-  ctx.value.lineWidth = 1
+  ctx.value.strokeStyle = "rgba(79, 195, 247, 0.2)";
+  ctx.value.lineWidth = 1;
 
   // X轴网格
   for (let i = 1; i < 10; i++) {
-    const x = padding + (i * (width - 2 * padding)) / 10
-    ctx.value.beginPath()
-    ctx.value.moveTo(x, padding)
-    ctx.value.lineTo(x, height - padding)
-    ctx.value.stroke()
+    const x = padding + (i * (width - 2 * padding)) / 10;
+    ctx.value.beginPath();
+    ctx.value.moveTo(x, padding);
+    ctx.value.lineTo(x, height - padding);
+    ctx.value.stroke();
   }
 
   // Y轴网格
   for (let i = 1; i < 10; i++) {
-    const y = padding + (i * (height - 2 * padding)) / 10
-    ctx.value.beginPath()
-    ctx.value.moveTo(padding, y)
-    ctx.value.lineTo(width - padding, y)
-    ctx.value.stroke()
+    const y = padding + (i * (height - 2 * padding)) / 10;
+    ctx.value.beginPath();
+    ctx.value.moveTo(padding, y);
+    ctx.value.lineTo(width - padding, y);
+    ctx.value.stroke();
   }
 
   // 绘制折线（核心修改）
-  ctx.value.fillStyle = '2c3e50'
-  ctx.value.beginPath()
-  ctx.value.strokeStyle = '#FF5722'
-  ctx.value.lineWidth = 1
-  ctx.value.lineCap = 'round'
-  ctx.value.lineJoin = 'round'
-  if(dataToShow.value.length>0){
-    for (let i = 0;i<dataToShow.value.length;i++){
-    dataToShow.value[i].forEach((point, index) => {
-    const x = padding + (point[0] - minX.value) * scaleX
-    const y = height - padding - (point[1] - minY.value) * scaleY
+  ctx.value.beginPath();
 
-    if (index === 0) {
-      ctx.value.moveTo(x, y)
-    } else {
-      ctx.value.lineTo(x, y)
+  ctx.value.lineWidth = 1;
+  ctx.value.lineCap = "round";
+  ctx.value.lineJoin = "round";
+  if (dataToShow.value.length > 0) {
+    let basiclabel = [width - padding, padding - 10];
+    for (let i = 0; i < pointsToDraw.length; i++) {
+      drawCurve(
+        colorChoice[i % 5],
+        pointsToDraw[i],
+        padding,
+        height,
+        scaleX,
+        scaleY
+      );
+      ctx.value.fillStyle = colorChoice[i % 5];
+      ctx.value.font = "bold 12px Arial";
+      ctx.value.textAlign = "center";
+      console.log(leftFileList.value[i]);
+      ctx.value.fillText(
+        leftFileList.value[i],
+        basiclabel[0],
+        basiclabel[1] - 10 * i
+      );
     }
-  })
-}
   }
-
-
-
-  ctx.value.fillStyle = '2c3e50'
-  
-  ctx.value.stroke()
-
-
-
+  if (markerMode.value) {
+    ctx.value.beginPath();
+    let realx = padding + (markIndex.value - minX.value) * scaleX
+          ctx.value.strokeStyle = '#e74c3c';
+          ctx.value.lineWidth = 2;
+          ctx.value.setLineDash([5, 5]);
+          ctx.value.moveTo(realx, padding);
+          ctx.value.lineTo(realx, height-padding);
+          ctx.value.stroke();
+          ctx.value.setLineDash([]);
+  }
   // 绘制标题
-  ctx.value.fillStyle = '#2c3e50'
-  ctx.value.font = 'bold 18px Arial'
-  ctx.value.textAlign = 'center'
-  ctx.value.fillText(activeFileName.value, width / 2, 30)
+  ctx.value.fillStyle = "#2c3e50";
+  ctx.value.font = "bold 18px Arial";
+  ctx.value.textAlign = "center";
+  ctx.value.fillText(activeFileName.value, width / 2, 30);
 
   // 绘制坐标轴标签
-  ctx.value.font = '12px Arial'
-  ctx.value.fillStyle = '#90a4ae'
+  ctx.value.font = "12px Arial";
+  ctx.value.fillStyle = "#90a4ae";
 
   // X轴标签
-  ctx.value.textAlign = 'center'
-  ctx.value.fillText('X 轴', width / 2, height - 10)
-
+  ctx.value.textAlign = "center";
+  ctx.value.fillText("X 轴", width / 2, height - 10);
+  ctx.value.fillStyle = "green";
+  ctx.value.fillText(minX.value, padding + 5, height - padding + 10);
+  ctx.value.fillText(maxX.value, width - padding - 10, height - padding + 10);
   // Y轴标签
-  ctx.value.save()
-  ctx.value.translate(15, height / 2)
-  ctx.value.rotate(-Math.PI / 2)
-  ctx.value.textAlign = 'center'
-  ctx.value.fillText('Y 轴', 0, 0)
-  ctx.value.restore()
+  ctx.value.save();
+  ctx.value.translate(15, height / 2);
+  ctx.value.rotate(-Math.PI / 2);
+  ctx.value.textAlign = "center";
+  ctx.value.fillText("Y 轴", 0, 0);
+  ctx.value.fillText(minY.value, -height / 2 + padding, padding - 20);
+  ctx.value.fillText(maxY.value, height / 2 - padding, padding - 20);
+  ctx.value.restore();
+  // if(markerMode.value){
+  //   ctx.value.moveTo()
+  // }
+};
+
+const markerMode = ref(true)
+const markIndex = ref(null)
+function handleCanvasClick(event) {
+  if (!markerMode.value) return;
+
+  const rect = canvas.value.getBoundingClientRect();
+  const x = event.clientX - rect.left-25;
+  const width = canvas.value.width;
+  const visibleData = getVisibleData();
+  if (visibleData.length === 0) return;
+
+  // 找到最近的数据点
+  markIndex.value = Math.round((x / (890)) * (visibleData[0].length - 1));
+  console.log(markIndex.value)
+  drawScatterPlot1()
+}
+
+watch(() => zoomLevel.value,
+  () => {
+    drawScatterPlot1()
+    console.log(sliderPosition.value)
+  },
+  { deep: false });
+function updateViewPosition() {
+  drawScatterPlot1();
 }
 
 // 清除画布
 const clearCanvas = () => {
-  activeFileIndex.value = -1
+  activeFileIndex.value = -1;
 
   if (ctx.value) {
-    ctx.value.clearRect(0, 0, canvas.value.width, canvas.value.height)
+    ctx.value.clearRect(0, 0, canvas.value.width, canvas.value.height);
   }
-}
+};
 
-// 生成随机数据
-const generateRandomData = () => {
-  activeFileIndex.value = -1
-  currentData1.value = generateSampleData(Math.floor(Math.random() * 100) + 50, 0, 100, 0, 100)
-  drawScatterPlot1()
-}
 
-// 生成示例数据
-function generateSampleData(count, minX, maxX, minY, maxY) {
-  const data = []
-  for (let i = 0; i < count; i++) {
-    const x = minX + Math.random() * (maxX - minX)
-    const y = minY + Math.random() * (maxY - minY)
-    data.push([x, y])
-  }
-  return data
-}
 
 // 获取当前日期
 function getCurrentDate() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 onMounted(() => {
-  drawScatterPlot1()
-  renewChart()
-})
+  test();
+  loadFile1();
+});
 
-
-defineExpose({
-  renewChart,
-
-})
+defineExpose({});
 </script>
 
 <style>
@@ -329,7 +422,7 @@ defineExpose({
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 }
 
 body {
@@ -340,6 +433,7 @@ body {
   align-items: center;
   padding: 20px;
 }
+
 .containerleft {
   width: 200px;
   height: auto;
@@ -351,6 +445,7 @@ body {
   left: 0px;
   top: 0px;
 }
+
 .containerdata {
   width: 1000px;
   max-width: 1400px;
@@ -699,7 +794,7 @@ th {
 }
 
 th:after {
-  content: '';
+  content: "";
   position: absolute;
   right: 0;
   top: 50%;

@@ -22,9 +22,11 @@ const modelStore = useModelStore()
 
 const currentData = modelStore.selectedVariables.length >= props.datain ? 
 ref(modelStore.selectedVariables[props.datain].data) : ref([])
-const generateRandomData = () => {
-  currentData.value = generateSampleData(Math.floor(Math.random() * 100) + 50, 0, 100, 0, 100)
-}
+
+const currentTag = modelStore.selectedVariables.length >= props.datain ? 
+ref(modelStore.selectedVariables[props.datain].tag) : ref([])
+
+
 const test = () => {
   console.log(props.datain)
   console.log(currentData.value.length)
@@ -124,6 +126,11 @@ const drawScatterPlot1 = () => {
     xMax.toFixed(1), 
     width - padding, 
     height - padding + 10
+  )
+   ctx.value.fillText(
+    currentTag.value, 
+    width/2 - padding, 
+    padding 
   )
   // Y轴标签
   ctx.value.save()
